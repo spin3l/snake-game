@@ -5,10 +5,10 @@
 #define WINDOW_WIDTH  1000
 #define WINDOW_HEIGHT 1000
 
-#define GRID_SIZE 12
+#define GRID_SIZE 100
 #define GRID_DIM  800
 
-#define DELAY 20
+#define DELAY 1
 
 enum snake_dir {
     SNAKE_UP,
@@ -20,6 +20,7 @@ typedef enum snake_dir SnakeDir;
 
 typedef struct {
     int x, y;
+    int score;
 } apple;
 
 struct snake {
@@ -31,7 +32,7 @@ typedef struct snake Snake;
 
 Snake *head, *tail;
 apple Apple;
-int snake_size = 0;
+int top_score = 0;
 
 void init_snake() {
     Snake *new = malloc(sizeof(Snake));
@@ -42,8 +43,6 @@ void init_snake() {
 
     head = new;
     tail = new;
-
-    snake_size = 1;
 
     return;
 }
@@ -74,12 +73,14 @@ void increase_snake() {
     tail->next = new;
 
     tail = new;
-    snake_size += 1;
+    if (top_score < Apple.score) {
+        top_score = Apple.score;
+    }
 
     return;
 }
 
-void render_grid(SDL_Renderer *renderer, int x, int y) {
+void render_grid(SDL_Renderer *renderer, int offset_x, int offset_y) {
     SDL_SetRenderDrawColor(renderer, 0x55, 0x55, 0xff, SDL_ALPHA_OPAQUE);
 
 #if 0
@@ -98,13 +99,18 @@ void render_grid(SDL_Renderer *renderer, int x, int y) {
 
 #else
 
-    SDL_Rect outline;
-    outline.x = x;
-    outline.y = y;
-    outline.w = GRID_DIM;
-    outline.h = GRID_DIM;
+    for (int i = 0; i < 255; i++) {        
+        SDL_SetRenderDrawColor(renderer, 0, 100 - i, 255 - i, 255 - i);
+        
+        SDL_Rect outline;
+        outline.x = offset_x - i;
+        outline.y = offset_y - i;
+        outline.w = GRID_DIM + i + i;
+        outline.h = GRID_DIM + i + i;
 
-    SDL_RenderDrawRect(renderer, &outline);
+        SDL_RenderDrawRect(renderer, &outline);
+    }
+    
 #endif
     return;
 }
@@ -168,25 +174,66 @@ void reset_snake() {
     increase_snake();
     increase_snake();
 
+    Apple.score = 0;
+
     return;
 }
 
-void render_snake(SDL_Renderer *renderer, int x, int y) {
-    SDL_SetRenderDrawColor(renderer, 0x00, 0xff, 0x00, SDL_ALPHA_OPAQUE);
+void render_snake(SDL_Renderer *renderer, int x, int y, bool isFlash) {
 
     int seg_size = GRID_DIM / GRID_SIZE;
     SDL_Rect seg;
-    seg.w = seg_size;
-    seg.h = seg_size;
+    seg.w = seg_size - 2;
+    seg.h = seg_size - 2;
+
+    SDL_Rect seg_out;
+    seg_out.w = seg_size;
+    seg_out.h = seg_size;
 
     Snake *track = head;
+
+    int bright = 255;
+    int b_dir = 0;
+
+    int r = 0x00;
+    int g = 0xff;
+    int b = 0x00;
+
+    if (isFlash) {
+        r = rand() % 255;
+        g = rand() % 255;
+        b = rand() % 255;
+    }
+
     while (track != NULL) {
-        seg.x = x + track->x * seg_size;
-        seg.y = y + track->y * seg_size;
+        SDL_SetRenderDrawColor(renderer, 0x00, 0x00, bright, SDL_ALPHA_OPAQUE);
+
+        seg_out.x = x + track->x * seg_size + 1;
+        seg_out.y = y + track->y * seg_size + 1;
+
+        SDL_RenderFillRect(renderer, &seg_out);
+
+        SDL_SetRenderDrawColor(renderer, r, g, b, SDL_ALPHA_OPAQUE);
+        seg.x = x + track->x * seg_size + 1;
+        seg.y = y + track->y * seg_size + 1;
 
         SDL_RenderFillRect(renderer, &seg);
 
         track = track->next;
+
+        if (b_dir == 0) {
+            bright -= 5;
+            if (bright < 150) {
+                b_dir = 1;
+            }
+        }
+
+        if (b_dir == 1) {
+            bright += 5;
+            if (bright > 250) {
+                b_dir = 0;
+            }
+        }
     }
 
     return;
@@ -205,7 +252,8 @@ bool position_in_snake(int x, int y) {
 }
 
 void gen_apple() {
-    if (snake_size == GRID_SIZE * GRID_SIZE - 1) {
+    Apple.score += 1;
+    if (Apple.score == GRID_SIZE * GRID_SIZE - 1) {
         printf("YOU WON!\n");
         exit(EXIT_SUCCESS);
     }
@@ -234,23 +282,40 @@ void render_apple(SDL_Renderer *renderer, int x, int y) {
     return;
 }
 
-void render_score(SDL_Renderer *renderer, TTF_Font *font) {
+void render_score(SDL_Renderer *renderer, TTF_Font *font, int offset_y) {
     
-    char text[16];
-    sprintf(text, "Score: %d", snake_size - 4);
+    char score_text[16], top_score_text[16];
+    sprintf(score_text, "SCORE %3d", Apple.score);
+    sprintf(top_score_text, "TOP SCORE %3d", top_score);
 
-    SDL_Surface *message_surface = TTF_RenderText_Solid(font, text, (SDL_Color) {0xff, 0xff, 0xff, 0xff});
-    SDL_Texture *message = SDL_CreateTextureFromSurface(renderer, message_surface);
+    SDL_Color score_color = {0x00, 0xff, 0x00, SDL_ALPHA_OPAQUE};
+    SDL_Color top_score_color = {0xff, 0xff, 0xff, SDL_ALPHA_OPAQUE};
+
+
+    SDL_Surface *message_surface = TTF_RenderText_Solid(font, score_text, score_color);
+    SDL_Texture *score_texture = SDL_CreateTextureFromSurface(renderer, message_surface);
     SDL_FreeSurface(message_surface);
 
-    SDL_Rect message_rect;
-    message_rect.x = 50;
-    message_rect.y = 50;
-    TTF_SizeText(font, text, &message_rect.w, &message_rect.h);
+    message_surface = TTF_RenderText_Solid(font, top_score_text, top_score_color);
+    SDL_Texture *top_score_texture = SDL_CreateTextureFromSurface(renderer, message_surface);
+    SDL_FreeSurface(message_surface);
 
-    SDL_RenderCopy(renderer, message, NULL, &message_rect);
+    SDL_Rect score_rect;
+    TTF_SizeText(font, score_text, &score_rect.w, &score_rect.h);
+    score_rect.x = (WINDOW_WIDTH - score_rect.w) / 2;
+    score_rect.y = offset_y + (score_rect.h / 2);
 
-    SDL_DestroyTexture(message);
+    SDL_Rect top_score_rect;
+    TTF_SizeText(font, top_score_text, &top_score_rect.w, &top_score_rect.h);
+    top_score_rect.x = (WINDOW_WIDTH - top_score_rect.w) / 2;
+    top_score_rect.y = offset_y - top_score_rect.h;
+
+
+    SDL_RenderCopy(renderer, score_texture, NULL, &score_rect);
+    SDL_RenderCopy(renderer, top_score_texture, NULL, &top_score_rect);
+
+    SDL_DestroyTexture(score_texture);
+    SDL_DestroyTexture(top_score_texture);
 }
 
 void detect_apple() {
@@ -269,10 +334,11 @@ bool position_outside_grid(int x, int y) {
     return false;
 }
 
-void detect_crash() {
+bool detect_crash() {
 
     if (position_outside_grid(head->x, head->y)) {
         reset_snake();
+        return true;
     }
 
     Snake *track = head;
@@ -283,11 +349,12 @@ void detect_crash() {
     while (track != NULL) {
         if (track->x == head->x && track->y == head->y) {
             reset_snake();
+            return true;
         }
         track = track->next;
     }
 
-    return;
+    return false;
 }
 
 void turn_left() {
@@ -398,18 +465,17 @@ int state(enum State try) {
     }
 
     if (position_outside_grid(try_x, try_y)) {
-        reward = reward - 100;
+        return -1000; // early stop
     }
 
     // DETECT TAIL
     if (position_in_snake(try_x, try_y)) {
-        reward = reward - 100;
-        return reward; // early stop
+        return -1000; // early stop
     }
 
     // Detect apple
     if (try_x == Apple.x && try_y == Apple.y) {
-        reward = reward + 100;
+        return 10000;
     }
 
     // Move towards apple
@@ -419,10 +485,10 @@ int state(enum State try) {
     int try_diff_y = abs(try_y - Apple.y);
     
     if (try_diff_x < diff_x) {
-        reward += 5;
+        reward += 100;
     }
     if (try_diff_y < diff_y) {
-        reward += 5;
+        reward += 100;
     }
 
     return reward;
@@ -452,6 +518,7 @@ int main() {
     increase_snake();
     increase_snake();
 
+    Apple.score = -1;
     gen_apple();
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
@@ -478,6 +545,7 @@ int main() {
         fprintf(stderr, "ERROR: !renderer");
     }
 
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
     SDL_RenderClear(renderer);
 
@@ -485,7 +553,7 @@ int main() {
     int grid_y = WINDOW_HEIGHT / 2 - GRID_DIM / 2;
 
     // Score font
-    TTF_Font *sans = TTF_OpenFont("/usr/share/fonts/truetype/freefont/FreeSansBold.ttf", 48);
+    TTF_Font *sans = TTF_OpenFont("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", 32);
     if (sans == NULL) {
         fprintf(stderr, "ERROR: !font\n");
         exit(EXIT_FAILURE);
@@ -495,6 +563,7 @@ int main() {
     bool quit = false;
     SDL_Event event;
 
+    int flash = 0;
     while (!quit) {
         while (SDL_PollEvent((&event))) {
             SDL_FlushEvents(SDL_USEREVENT, SDL_LASTEVENT);
@@ -541,12 +610,21 @@ int main() {
 
         move_snake();
         detect_apple();
-        detect_crash();
+        if (detect_crash()) {
+            flash = 0;
+        }
 
+        if ((Apple.score % 10) == 0 && Apple.score != 0) {
+            flash = 10;
+        }
         render_grid(renderer, grid_x, grid_y);
-        render_snake(renderer, grid_x, grid_y);
+        render_score(renderer, sans, grid_x);
+        render_snake(renderer, grid_x, grid_y, flash);
         render_apple(renderer, grid_x, grid_y);
-        render_score(renderer, sans);
+
+        if (flash > 0) {
+            flash--;
+        }
 
         ai();
 
