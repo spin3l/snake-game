@@ -29,6 +29,7 @@ typedef struct snake Snake;
 
 Snake *head, *tail;
 apple Apple;
+int snake_size = 1;
 
 void init_snake() {
     Snake *new = malloc(sizeof(Snake));
@@ -39,6 +40,8 @@ void init_snake() {
 
     head = new;
     tail = new;
+
+    snake_size = 1;
 
     return;
 }
@@ -69,12 +72,15 @@ void increase_snake() {
     tail->next = new;
 
     tail = new;
+    snake_size += 1;
 
     return;
 }
 
 void render_grid(SDL_Renderer *renderer, int x, int y) {
-    SDL_SetRenderDrawColor(renderer, 0x55, 0x55, 0x55, SDL_ALPHA_OPAQUE);
+    SDL_SetRenderDrawColor(renderer, 0x55, 0x55, 0xff, SDL_ALPHA_OPAQUE);
+
+#if 0
     int cell_size = GRID_DIM / GRID_SIZE;
     SDL_Rect cell;
     cell.w = cell_size;
@@ -88,6 +94,16 @@ void render_grid(SDL_Renderer *renderer, int x, int y) {
         }
     }
 
+# else
+
+    SDL_Rect outline;
+    outline.x = x;
+    outline.y = y;
+    outline.w = GRID_DIM;
+    outline.h = GRID_DIM;
+
+    SDL_RenderDrawRect(renderer, &outline);
+# endif
     return;
 }
 
@@ -198,15 +214,15 @@ bool position_in_snake(int x, int y) {
 }
 
 void gen_apple() {
-    int x, y;
+    if (snake_size == GRID_SIZE * GRID_SIZE - 1) {
+        printf("YOU WON!");
+        exit(EXIT_SUCCESS);
+    }
 
     do {
-        x = rand() % GRID_SIZE;
-        y = rand() % GRID_SIZE;
-    } while (position_in_snake(x, y));
-
-    Apple.x = x;
-    Apple.y = y;
+        Apple.x = rand() % GRID_SIZE;
+        Apple.y = rand() % GRID_SIZE;
+    } while (position_in_snake(Apple.x, Apple.y));
 
     return;
 }
