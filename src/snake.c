@@ -94,7 +94,7 @@ void render_grid(SDL_Renderer *renderer, int x, int y) {
         }
     }
 
-# else
+#else
 
     SDL_Rect outline;
     outline.x = x;
@@ -103,7 +103,7 @@ void render_grid(SDL_Renderer *renderer, int x, int y) {
     outline.h = GRID_DIM;
 
     SDL_RenderDrawRect(renderer, &outline);
-# endif
+#endif
     return;
 }
 
@@ -125,17 +125,6 @@ void move_snake() {
     case SNAKE_RIGHT:
         head->x++;
         break;
-    }
-
-    if (head->x < 0) {
-        head->x = GRID_SIZE - 1;
-    } else if (head->x >= GRID_SIZE) {
-        head->x = 0;
-    }
-    if (head->y < 0) {
-        head->y = GRID_SIZE - 1;
-    } else if (head->y >= GRID_SIZE) {
-        head->y = 0;
     }
 
     Snake *track = NULL;
@@ -253,19 +242,80 @@ void detect_apple() {
 }
 
 void detect_crash() {
+    if (head->x < 0 || head->x >= GRID_SIZE || head->y < 0 || head->y >= GRID_SIZE) {
+        reset_snake();
+    }
+
     Snake *track = head;
-    
     if (track->next != NULL) {
         track = track->next;
     }
-    
+
     while (track != NULL) {
         if (track->x == head->x && track->y == head->y) {
-            reset_snake();        
+            reset_snake();
         }
         track = track->next;
     }
-    
+
+    return;
+}
+
+void turn_left() {
+
+    switch (head->dir) {
+    case SNAKE_UP:
+        head->dir = SNAKE_LEFT;
+        break;
+    case SNAKE_DOWN:
+        head->dir = SNAKE_RIGHT;
+        break;
+    case SNAKE_LEFT:
+        head->dir = SNAKE_DOWN;
+        break;
+    case SNAKE_RIGHT:
+        head->dir = SNAKE_UP;
+        break;
+    }
+
+    return;
+}
+
+void turn_right() {
+
+    switch (head->dir) {
+    case SNAKE_UP:
+        head->dir = SNAKE_RIGHT;
+        break;
+    case SNAKE_DOWN:
+        head->dir = SNAKE_LEFT;
+        break;
+    case SNAKE_LEFT:
+        head->dir = SNAKE_UP;
+        break;
+    case SNAKE_RIGHT:
+        head->dir = SNAKE_DOWN;
+        break;
+    }
+
+    return;
+}
+
+void ai() {
+    int try_f;
+    int try_l;
+    int try_r;
+
+    if (try_f >= try_l && try_f >= try_r) {
+        // CONTINUE FORWARD
+    } else {
+        if (try_l >= try_r) {
+            turn_left();
+        } else {
+            turn_right();
+        }
+    }
+
     return;
 }
 
@@ -353,12 +403,13 @@ int main() {
 
         move_snake();
         detect_apple();
+        detect_crash();
 
         render_grid(renderer, grid_x, grid_y);
         render_snake(renderer, grid_x, grid_y);
         render_apple(renderer, grid_x, grid_y);
 
-        detect_crash();
+        // ai();
 
         // RENDER LOOP END
         SDL_SetRenderDrawColor(renderer, 0x11, 0x11, 0x11, SDL_ALPHA_OPAQUE);
