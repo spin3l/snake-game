@@ -4,4 +4,6 @@
 #include <time.h>
 
 // Graphics
-#include <SDL.h>
+#include <SDL2/SDL.h>
+// Font
+#include <SDL2/SDL_ttf.h>

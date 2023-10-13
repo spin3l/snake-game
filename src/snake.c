@@ -5,8 +5,10 @@
 #define WINDOW_WIDTH  1000
 #define WINDOW_HEIGHT 1000
 
-#define GRID_SIZE 20
+#define GRID_SIZE 28
 #define GRID_DIM  800
+
+#define DELAY 20
 
 enum snake_dir {
     SNAKE_UP,
@@ -29,7 +31,7 @@ typedef struct snake Snake;
 
 Snake *head, *tail;
 apple Apple;
-int snake_size = 1;
+int snake_size = 0;
 
 void init_snake() {
     Snake *new = malloc(sizeof(Snake));
@@ -232,6 +234,25 @@ void render_apple(SDL_Renderer *renderer, int x, int y) {
     return;
 }
 
+void render_score(SDL_Renderer *renderer, TTF_Font *font) {
+    
+    char text[16];
+    sprintf(text, "Score: %d", snake_size - 4);
+
+    SDL_Surface *message_surface = TTF_RenderText_Solid(font, text, (SDL_Color) {0xff, 0xff, 0xff, 0xff});
+    SDL_Texture *message = SDL_CreateTextureFromSurface(renderer, message_surface);
+    SDL_FreeSurface(message_surface);
+
+    SDL_Rect message_rect;
+    message_rect.x = 50;
+    message_rect.y = 50;
+    TTF_SizeText(font, text, &message_rect.w, &message_rect.h);
+
+    SDL_RenderCopy(renderer, message, NULL, &message_rect);
+
+    SDL_DestroyTexture(message);
+}
+
 void detect_apple() {
     if (head->x == Apple.x && head->y == Apple.y) {
         gen_apple();
@@ -241,8 +262,16 @@ void detect_apple() {
     return;
 }
 
+bool position_outside_grid(int x, int y) {
+    if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) {
+        return true;
+    }
+    return false;
+}
+
 void detect_crash() {
-    if (head->x < 0 || head->x >= GRID_SIZE || head->y < 0 || head->y >= GRID_SIZE) {
+
+    if (position_outside_grid(head->x, head->y)) {
         reset_snake();
     }
 
@@ -301,19 +330,115 @@ void turn_right() {
     return;
 }
 
+enum State {
+    TRY_FORWARD,
+    TRY_LEFT,
+    TRY_RIGHT,
+};
+
+int state(enum State try) {
+    int reward = 0;
+
+    int try_x = head->x;
+    int try_y = head->y;
+
+    switch (head->dir) {
+    case SNAKE_UP:
+        switch (try) {
+        case TRY_FORWARD:
+            try_y = try_y - 1;
+            break;
+        case TRY_LEFT:
+            try_x = try_x - 1;
+            break;
+        case TRY_RIGHT:
+            try_x = try_x + 1;
+            break;
+        }
+        break;
+    case SNAKE_DOWN:
+        switch (try) {
+        case TRY_FORWARD:
+            try_y = try_y + 1;
+            break;
+        case TRY_LEFT:
+            try_x = try_x + 1;
+            break;
+        case TRY_RIGHT:
+            try_x = try_x - 1;
+            break;
+        }
+        break;
+    case SNAKE_LEFT:
+        switch (try) {
+        case TRY_FORWARD:
+            try_x = try_x - 1;
+            break;
+        case TRY_LEFT:
+            try_y = try_y + 1;
+            break;
+        case TRY_RIGHT:
+            try_y = try_y - 1;
+            break;
+        }
+        break;
+    case SNAKE_RIGHT:
+        switch (try) {
+        case TRY_FORWARD:
+            try_x = try_x + 1;
+            break;
+        case TRY_LEFT:
+            try_y = try_y - 1;
+            break;
+        case TRY_RIGHT:
+            try_y = try_y + 1;
+            break;
+        }
+        break;
+    }
+
+    if (position_outside_grid(try_x, try_y)) {
+        reward = reward - 100;
+    }
+
+    // DETECT TAIL
+    if (position_in_snake(try_x, try_y)) {
+        reward = reward - 100;
+        return reward; // early stop
+    }
+
+    // Detect apple
+    if (try_x == Apple.x && try_y == Apple.y) {
+        reward = reward + 100;
+    }
+
+    // Move towards apple
+    int diff_x = abs(head->x - Apple.x);
+    int diff_y = abs(head->y - Apple.y);
+    int try_diff_x = abs(try_x - Apple.x);
+    int try_diff_y = abs(try_y - Apple.y);
+    
+    if (try_diff_x < diff_x) {
+        reward += 5;
+    }
+    if (try_diff_y < diff_y) {
+        reward += 5;
+    }
+
+    return reward;
+}
+
 void ai() {
-    int try_f;
-    int try_l;
-    int try_r;
+    int try_f = state(TRY_FORWARD);
+    int try_l = state(TRY_LEFT);
+    int try_r = state(TRY_RIGHT);
 
     if (try_f >= try_l && try_f >= try_r) {
         // CONTINUE FORWARD
+    } else if (try_l >= try_r) {
+        turn_left();
     } else {
-        if (try_l >= try_r) {
-            turn_left();
-        } else {
-            turn_right();
-        }
+        turn_right();
     }
 
     return;
@@ -328,6 +453,10 @@ int main() {
     increase_snake();
 
     gen_apple();
+
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+
+    TTF_Init();
 
     SDL_Window *window;
     SDL_Renderer *renderer;
@@ -349,10 +478,19 @@ int main() {
         fprintf(stderr, "ERROR: !renderer");
     }
 
+
     SDL_RenderClear(renderer);
 
     int grid_x = WINDOW_WIDTH / 2 - GRID_DIM / 2;
     int grid_y = WINDOW_HEIGHT / 2 - GRID_DIM / 2;
+
+    // Score font
+    TTF_Font *sans = TTF_OpenFont("/usr/share/fonts/truetype/freefont/FreeSansBold.ttf", 48);
+    if (sans == NULL) {
+        fprintf(stderr, "ERROR: !font\n");
+        exit(EXIT_FAILURE);
+    }
+    
 
     bool quit = false;
     SDL_Event event;
@@ -408,19 +546,25 @@ int main() {
         render_grid(renderer, grid_x, grid_y);
         render_snake(renderer, grid_x, grid_y);
         render_apple(renderer, grid_x, grid_y);
+        render_score(renderer, sans);
 
-        // ai();
+        ai();
 
         // RENDER LOOP END
         SDL_SetRenderDrawColor(renderer, 0x11, 0x11, 0x11, SDL_ALPHA_OPAQUE);
         SDL_RenderPresent(renderer);
 
-        SDL_Delay(80);
+        SDL_Delay(DELAY);
     }
 
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);
+
+    TTF_CloseFont(sans);
+
+    TTF_Quit();
     SDL_Quit();
+
 
     return 0;
 }
