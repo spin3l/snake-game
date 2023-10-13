@@ -5,7 +5,7 @@
 #define WINDOW_WIDTH  1000
 #define WINDOW_HEIGHT 1000
 
-#define GRID_SIZE 28
+#define GRID_SIZE 12
 #define GRID_DIM  800
 
 #define DELAY 20
@@ -206,7 +206,7 @@ bool position_in_snake(int x, int y) {
 
 void gen_apple() {
     if (snake_size == GRID_SIZE * GRID_SIZE - 1) {
-        printf("YOU WON!");
+        printf("YOU WON!\n");
         exit(EXIT_SUCCESS);
     }
 
