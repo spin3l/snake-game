@@ -5,79 +5,64 @@
 #define WINDOW_WIDTH  1000
 #define WINDOW_HEIGHT 1000
 
-#define GRID_SIZE 100
+#define GRID_SIZE 20
 #define GRID_DIM  800
 
-#define DELAY 1
+#define DELAY 5
 
-enum snake_dir {
-    SNAKE_UP,
-    SNAKE_DOWN,
-    SNAKE_LEFT,
-    SNAKE_RIGHT,
-};
-typedef enum snake_dir SnakeDir;
 
-typedef struct {
-    int x, y;
-    int score;
-} apple;
+size_t snake_size;
+size_t total_array_size;
+BodyTile *snake;
 
-struct snake {
-    int x, y;
-    SnakeDir dir;
-    struct snake *next;
-};
-typedef struct snake Snake;
-
-Snake *head, *tail;
 apple Apple;
 int top_score = 0;
 
 void init_snake() {
-    Snake *new = malloc(sizeof(Snake));
-    new->x = rand() % (GRID_SIZE / 2) + (GRID_SIZE / 4);
-    new->y = rand() % (GRID_SIZE / 2) + (GRID_SIZE / 4);
-    new->dir = SNAKE_UP;
-    new->next = NULL;
+    total_array_size = GRID_SIZE * 2;
+    snake_size = 1;
 
-    head = new;
-    tail = new;
+    snake = malloc((sizeof *snake) * total_array_size);
 
-    return;
+    snake[0].x = rand() % (GRID_SIZE / 2) + (GRID_SIZE / 4);
+    snake[0].y = rand() % (GRID_SIZE / 2) + (GRID_SIZE / 4);
+    snake[0].dir = SNAKE_UP;
 }
 
 void increase_snake() {
-    Snake *new = malloc(sizeof(Snake));
+    snake_size++;
 
-    switch (tail->dir) {
+    if (total_array_size == snake_size) {
+        snake = realloc(snake, (sizeof *snake) * snake_size * 2);
+        total_array_size *= 2;
+    }
+
+    BodyTile tail = snake[snake_size - 2];
+    BodyTile *new = &snake[snake_size - 1];
+
+    switch (tail.dir) {
     case SNAKE_UP:
-        new->x = tail->x;
-        new->y = tail->y + 1;
+        new->x = tail.x;
+        new->y = tail.y + 1;
         break;
     case SNAKE_DOWN:
-        new->x = tail->x;
-        new->y = tail->y - 1;
+        new->x = tail.x;
+        new->y = tail.y - 1;
         break;
     case SNAKE_LEFT:
-        new->x = tail->x + 1;
-        new->y = tail->y;
+        new->x = tail.x + 1;
+        new->y = tail.y;
         break;
     case SNAKE_RIGHT:
-        new->x = tail->x - 1;
-        new->y = tail->y;
+        new->x = tail.x - 1;
+        new->y = tail.y;
         break;
     }
-    new->dir = tail->dir;
-    new->next = NULL;
-    tail->next = new;
+    new->dir = tail.dir;
 
-    tail = new;
     if (top_score < Apple.score) {
         top_score = Apple.score;
     }
-
-    return;
 }
 
 void render_grid(SDL_Renderer *renderer, int offset_x, int offset_y) {
@@ -116,6 +101,7 @@ void render_grid(SDL_Renderer *renderer, int offset_x, int offset_y) {
 }
 
 void move_snake() {
+    BodyTile *head = &snake[0];
     int prev_x = head->x;
     int prev_y = head->y;
     SnakeDir prev_dir = head->dir;
@@ -134,13 +120,10 @@ void move_snake() {
         head->x++;
         break;
     }
+    
+    for (size_t i = 1; i < snake_size; i++) {
+        BodyTile *track = &snake[i];        
 
-    Snake *track = NULL;
-    if (head->next != NULL) {
-        track = head->next;
-    }
-
-    while (track != NULL) {
         int save_x = track->x;
         int save_y = track->y;
         SnakeDir save_dir = track->dir;
@@ -149,34 +132,20 @@ void move_snake() {
         track->y = prev_y;
         track->dir = prev_dir;
 
-        track = track->next;
-
         prev_x = save_x;
         prev_y = save_y;
         prev_dir = save_dir;
     }
-
-    return;
 }
 
 void reset_snake() {
-    Snake *track = head;
-    Snake *temp;
-
-    while (track != NULL) {
-        temp = track;
-        track = track->next;
-        free(temp);
-    }
-
+    free(snake);
     init_snake();
     increase_snake();
     increase_snake();
     increase_snake();
 
     Apple.score = 0;
-
-    return;
 }
 
 void render_snake(SDL_Renderer *renderer, int x, int y, bool isFlash) {
@@ -189,8 +158,6 @@ void render_snake(SDL_Renderer *renderer, int x, int y, bool isFlash) {
     SDL_Rect seg_out;
     seg_out.w = seg_size;
     seg_out.h = seg_size;
-
-    Snake *track = head;
 
     int bright = 255;
     int b_dir = 0;
@@ -205,21 +172,20 @@ void render_snake(SDL_Renderer *renderer, int x, int y, bool isFlash) {
         b = rand() % 255;
     }
 
-    while (track != NULL) {
+    for (size_t i = 0; i < snake_size; i++) {
+        BodyTile track = snake[i];
         SDL_SetRenderDrawColor(renderer, 0x00, 0x00, bright, SDL_ALPHA_OPAQUE);
 
-        seg_out.x = x + track->x * seg_size + 1;
-        seg_out.y = y + track->y * seg_size + 1;
+        seg_out.x = x + track.x * seg_size + 1;
+        seg_out.y = y + track.y * seg_size + 1;
 
         SDL_RenderFillRect(renderer, &seg_out);
 
         SDL_SetRenderDrawColor(renderer, r, g, b, SDL_ALPHA_OPAQUE);
-        seg.x = x + track->x * seg_size + 1;
-        seg.y = y + track->y * seg_size + 1;
+        seg.x = x + track.x * seg_size + 1;
+        seg.y = y + track.y * seg_size + 1;
 
         SDL_RenderFillRect(renderer, &seg);
-
-        track = track->next;
 
         if (b_dir == 0) {
             bright -= 5;
@@ -235,17 +201,14 @@ void render_snake(SDL_Renderer *renderer, int x, int y, bool isFlash) {
             }
         }
     }
-
-    return;
 }
 
 bool position_in_snake(int x, int y) {
-    Snake *track = head;
-    while (track != NULL) {
-        if (x == track->x && y == track->y) {
+    for (size_t i = 0; i < snake_size; i++) {
+        BodyTile track = snake[i];
+        if (x == track.x && y == track.y) {
             return true;
         }
-        track = track->next;
     }
 
     return false;
@@ -319,7 +282,7 @@ void render_score(SDL_Renderer *renderer, TTF_Font *font, int offset_y) {
 }
 
 void detect_apple() {
-    if (head->x == Apple.x && head->y == Apple.y) {
+    if (snake[0].x == Apple.x && snake[0].y == Apple.y) {
         gen_apple();
         increase_snake();
     }
@@ -335,30 +298,21 @@ bool position_outside_grid(int x, int y) {
 }
 
 bool detect_crash() {
-
-    if (position_outside_grid(head->x, head->y)) {
-        reset_snake();
+    if (position_outside_grid(snake[0].x, snake[0].y)) {
         return true;
     }
 
-    Snake *track = head;
-    if (track->next != NULL) {
-        track = track->next;
-    }
-
-    while (track != NULL) {
-        if (track->x == head->x && track->y == head->y) {
-            reset_snake();
+    for (size_t i = 1; i < snake_size; i++) {
+        BodyTile track = snake[i];
+        if (track.x == snake[0].x && track.y == snake[0].y) {
             return true;
         }
-        track = track->next;
     }
-
     return false;
 }
 
 void turn_left() {
-
+    BodyTile *head = &snake[0];
     switch (head->dir) {
     case SNAKE_UP:
         head->dir = SNAKE_LEFT;
@@ -373,12 +327,10 @@ void turn_left() {
         head->dir = SNAKE_UP;
         break;
     }
-
-    return;
 }
 
 void turn_right() {
-
+    BodyTile *head = &snake[0];
     switch (head->dir) {
     case SNAKE_UP:
         head->dir = SNAKE_RIGHT;
@@ -405,6 +357,7 @@ enum State {
 
 int state(enum State try) {
     int reward = 0;
+    BodyTile *head = &snake[0];
 
     int try_x = head->x;
     int try_y = head->y;
@@ -565,6 +518,7 @@ int main() {
 
     int flash = 0;
     while (!quit) {
+        BodyTile *head = &snake[0];
         while (SDL_PollEvent((&event))) {
             SDL_FlushEvents(SDL_USEREVENT, SDL_LASTEVENT);
             switch (event.type) {
@@ -611,6 +565,7 @@ int main() {
         move_snake();
         detect_apple();
         if (detect_crash()) {
+            reset_snake();
             flash = 0;
         }
 
@@ -634,6 +589,8 @@ int main() {
 
         SDL_Delay(DELAY);
     }
+
+    free(snake);
 
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);
